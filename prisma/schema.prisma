@@ -1,0 +1,266 @@
+// トラベルエステート株式会社 賃貸物件広告サイト - Prisma スキーマ
+//
+// 開発環境: SQLite (env DATABASE_URL="file:./dev.db")
+// 本番環境: provider を "postgresql" に変更し、DATABASE_URL を接続文字列に変更するだけで移行可能。
+// SQLite は列挙型(enum)をネイティブサポートしないため、状態値はすべて String 列 + アプリ層(zod)でのバリデーションとして
+// 実装している。TypeScript 側の union 型定義は src/lib/constants.ts を参照。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// 管理者ユーザー
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("admin_users")
+}
+
+/// 会社情報(シングルトン設定)
+model CompanyInfo {
+  id     String @id @default("singleton")
+  name   String
+  postalCode String
+  prefecture String
+  city   String
+  addressLine String
+  phone  String
+  businessHours String
+  closedDays    String
+  licenseNumber String
+  associations  String // カンマ区切り
+  logoText      String  @default("トラベルエステート株式会社")
+  logoUrl       String?
+  topCatchCopy    String @default("自社管理物件を、わかりやすく、探しやすく。")
+  topSubCopy      String @default("トラベルエステート株式会社の募集中物件をご案内します。")
+  companyIntro    String @default("")
+  privacyPolicyBody String @default("")
+  updateIntervalDays Int    @default(14)
+  overdueAction      String @default("WARN_ONLY") // WARN_ONLY | AUTO_UNPUBLISH
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("company_info")
+}
+
+/// 建物
+model Building {
+  id          String  @id @default(cuid())
+  name        String
+  nameKana    String?
+  postalCode  String
+  prefecture  String
+  city        String
+  addressLine  String
+  addressLine2 String?
+  latitude    Float?
+  longitude   Float?
+  addressDisclosureLevel String @default("FULL") // FULL | CITY_ONLY
+
+  structure   String
+  totalFloors Int
+  totalUnits  Int?
+  builtYearMonth String // "2015-04" 形式
+
+  busInfo              String?
+  parkingInfo          String?
+  surroundingInfo      String?
+  commonFacilitiesNote String?
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stations  BuildingStation[]
+  units     Unit[]
+  photos    Photo[]
+  equipment BuildingEquipment[]
+
+  @@map("buildings")
+}
+
+/// 建物の交通情報(複数登録可)
+model BuildingStation {
+  id          String   @id @default(cuid())
+  buildingId  String
+  building    Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  lineName    String
+  stationName String
+  walkMinutes Int?
+  busMinutes  Int?
+  note        String?
+  order       Int      @default(0)
+
+  @@index([buildingId])
+  @@map("building_stations")
+}
+
+/// 募集住戸
+model Unit {
+  id               String   @id @default(cuid())
+  buildingId       String
+  building         Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  managementNumber String   @unique
+
+  roomNumber    String
+  floor         Int?
+  layoutType    String
+  exclusiveArea Float
+  direction     String?
+
+  rent               Int
+  managementFee      Int?
+  commonServiceFee   Int?
+  deposit            Int?
+  keyMoney           Int?
+  guaranteeDeposit   Int?
+  amortization       Int?
+  guarantorCompanyFee Int?
+  fireInsuranceFee   Int?
+  keyExchangeFee     Int?
+  cleaningFee        Int?
+  renewalFee         Int?
+
+  contractPeriod String?
+  contractType   String? // NORMAL | FIXED_TERM
+  availableDate  String?
+  currentStatus  String?
+
+  recruitingConditions String?
+  catchCopy             String?
+  remarks               String?
+  specialTerms          String?
+  transactionType       String? // BROKERAGE | AGENCY | LANDLORD
+  featureTags           String? // カンマ区切り
+
+  recruitingStatus   String    @default("DRAFT") // DRAFT|RECRUITING|APPLICATION_RECEIVED|CONTRACTED|SUSPENDED|UPDATE_PENDING
+  publicationStatus  String    @default("UNPUBLISHED") // PUBLISHED|UNPUBLISHED
+  publishStartAt     DateTime?
+  publishEndAt       DateTime?
+  publishedAt        DateTime?
+  lastUpdatedAt      DateTime?
+  nextUpdateDueAt    DateTime?
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  otherCosts OtherCost[]
+  photos     Photo[]
+  equipment  UnitEquipment[]
+  inquiries  Inquiry[]
+
+  @@index([buildingId])
+  @@map("units")
+}
+
+/// その他費用(複数行)
+model OtherCost {
+  id         String  @id @default(cuid())
+  unitId     String
+  unit       Unit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  name       String
+  amount     Int
+  taxType    String  @default("INCLUDED") // INCLUDED|EXCLUDED|NON_TAXABLE
+  isRequired Boolean @default(true)
+  remarks    String?
+  order      Int     @default(0)
+
+  @@index([unitId])
+  @@map("other_costs")
+}
+
+/// 写真(建物・住戸共通)
+model Photo {
+  id           String    @id @default(cuid())
+  targetType   String // BUILDING | UNIT
+  buildingId   String?
+  building     Building? @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  unitId       String?
+  unit         Unit?     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  url          String
+  thumbnailUrl String?
+  category     String // EXTERIOR|ENTRANCE|COMMON_AREA|LIVING|WESTERN_ROOM|KITCHEN|BATH|TOILET|WASHROOM|STORAGE|BALCONY|VIEW|FLOOR_PLAN|OTHER
+  caption      String?
+  altText      String?
+  order        Int       @default(0)
+  isMain       Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+
+  @@index([buildingId])
+  @@index([unitId])
+  @@map("photos")
+}
+
+/// 設備マスター
+model EquipmentMaster {
+  id    String @id @default(cuid())
+  name  String @unique
+  scope String // BUILDING | UNIT | BOTH
+  order Int    @default(0)
+
+  buildings BuildingEquipment[]
+  units     UnitEquipment[]
+
+  @@map("equipment_master")
+}
+
+model BuildingEquipment {
+  buildingId  String
+  building    Building        @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  equipmentId String
+  equipment   EquipmentMaster @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@id([buildingId, equipmentId])
+  @@map("building_equipment")
+}
+
+model UnitEquipment {
+  unitId      String
+  unit        Unit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  equipmentId String
+  equipment   EquipmentMaster @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@id([unitId, equipmentId])
+  @@map("unit_equipment")
+}
+
+/// 問い合わせ
+model Inquiry {
+  id       String @id @default(cuid())
+  unitId   String?
+  unit     Unit?   @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  buildingName     String?
+  roomNumber       String?
+  managementNumber String?
+
+  name                   String
+  phone                  String?
+  email                  String?
+  preferredContactMethod String // PHONE | EMAIL
+  preferredViewingDate   String?
+  desiredMoveInTime      String?
+  message                String?
+  sourceUrl              String?
+
+  status    String   @default("NEW") // NEW|IN_PROGRESS|DONE|CANCELLED
+  adminMemo String?
+
+  receivedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([unitId])
+  @@map("inquiries")
+}

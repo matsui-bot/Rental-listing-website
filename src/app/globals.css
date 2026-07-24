@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+
+  /* コーポレートカラー(仮)。変更する場合はここだけ調整すればサイト全体に反映される。 */
+  --color-brand-50: #eef7f5;
+  --color-brand-100: #d3ebe5;
+  --color-brand-300: #7fbfaf;
+  --color-brand-500: #0f766e;
+  --color-brand-600: #0d6058;
+  --color-brand-700: #0a4a44;
+  --color-brand-900: #052c28;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --color-brand-50: var(--color-brand-50);
+  --color-brand-100: var(--color-brand-100);
+  --color-brand-300: var(--color-brand-300);
+  --color-brand-500: var(--color-brand-500);
+  --color-brand-600: var(--color-brand-600);
+  --color-brand-700: var(--color-brand-700);
+  --color-brand-900: var(--color-brand-900);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", Arial, Helvetica, sans-serif;
+  font-size: 16px;
+}
+
+/* 高齢者を含めて操作しやすいよう、フォームやボタンの最小タップサイズを確保する */
+button,
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea,
+a.tap-target {
+  min-height: 44px;
+}
+
+a {
+  color: inherit;
+}
