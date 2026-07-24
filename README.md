@@ -144,15 +144,26 @@ await prisma.adminUser.create({
 
 ## 13. 画像ストレージの変更方法
 
-`src/lib/storage/` に `StorageProvider` インターフェースを定義し、`STORAGE_DRIVER` 環境変数で実装を切り替える設計にしている。
+`src/lib/storage/` に `StorageProvider` インターフェースを定義し、`STORAGE_DRIVER` 環境変数で実装を切り替える設計にしている。リサイズ・サムネイル生成(`image-processing.ts`)はローカル/S3互換ストレージで共通。
 
-- `local`(既定): `public/uploads/` 配下に保存。開発環境向け。
-- `s3`: `src/lib/storage/s3.ts` は **インターフェースのみ実装済みのスタブ**(未実装)。本番導入時は以下の対応が必要:
-  1. `npm install @aws-sdk/client-s3`
-  2. `saveImage` / `deleteImage` を `PutObjectCommand` / `DeleteObjectCommand` で実装(リサイズ・サムネイル生成は `local.ts` の sharp 処理を再利用可能)
-  3. `.env` で `STORAGE_DRIVER=s3` と `S3_*` 系変数を設定
+- `local`(既定): `public/uploads/` 配下に保存。開発環境向け。Vercel等のサーバーレス環境ではファイルシステムが一時的なため本番では使用不可。
+- `s3`: `@aws-sdk/client-s3` を使用してS3互換ストレージ(AWS S3 / Cloudflare R2 / MinIO 等)に保存する実装済み。**Cloudflare R2 での設定手順:**
+  1. Cloudflareダッシュボード → R2 でバケットを作成(例: `travel-estate-media`)
+  2. バケットの Settings → Public access を有効化(または任意のカスタムドメインを紐付け)し、公開URL(`https://pub-xxxxxxxx.r2.dev` 等)を控える
+  3. 「R2 API トークンの管理」からアクセスキー(Access Key ID / Secret Access Key)を発行
+  4. `.env` に以下を設定(`.env.example` にコメント付きで記載済み):
+     ```
+     STORAGE_DRIVER="s3"
+     S3_ENDPOINT="https://<account_id>.r2.cloudflarestorage.com"
+     S3_REGION="auto"
+     S3_BUCKET="travel-estate-media"
+     S3_ACCESS_KEY_ID="..."
+     S3_SECRET_ACCESS_KEY="..."
+     S3_PUBLIC_BASE_URL="https://pub-xxxxxxxx.r2.dev"
+     ```
+  5. `next.config.ts` は `S3_PUBLIC_BASE_URL` のホスト名と `*.r2.dev` を自動的に `images.remotePatterns` に登録するため、追加設定は不要
 
-アプリケーションコード側は `getStorageProvider()` 経由でしか画像保存処理を呼び出さないため、上記の実装を追加するだけで切り替えが完了する。
+アプリケーションコード側は `getStorageProvider()` 経由でしか画像保存処理を呼び出さないため、`.env` の切り替えだけでローカル/S3互換ストレージを変更できる。
 
 ## 14. データベースをPostgreSQLへ変更する方法
 
@@ -199,8 +210,7 @@ await prisma.adminUser.create({
 
 ## 16. 未実装・今後の対応が必要な項目
 
-- **S3ストレージの実装**: インターフェースのみ実装済み。本番導入時は「13」の手順で実装が必要。
-- **更新期限超過の自動処理**: 現状は管理画面を開いたタイミングでの簡易評価。本番では定期実行ジョブ化を推奨。
+- **更新期限超過の自動処理**: 現状は管理画面を開いたタイミングでの簡易評価。本番では定期実行ジョブ化を推奨(Vercelの場合はVercel Cronの利用を推奨。本書「19」参照)。
 - **建物の「共用設備」**: 設備マスターとのM2M紐付けは行わず、自由記述欄(`commonFacilitiesNote`)として実装(設備マスターは住戸の「設備・条件」選択でのみ使用)。将来的に建物側も選択式にする場合はスキーマの `BuildingEquipment` を使ったUIの追加が必要(Prismaモデルは用意済み)。
 - **問い合わせフォームのレート制限**: インメモリ実装のため単一インスタンス運用が前提。
 - **写真のドラッグ&ドロップ**: ブラウザ標準のDrag and Drop APIのみで実装(タッチ操作でのドラッグ並び替えは非対応。スマートフォンでは削除→再アップロードでの並び替えを想定)。
@@ -226,3 +236,30 @@ src/components/         UIコンポーネント(layout/property/search/inquiry/a
 src/lib/                データ取得(data/)・バリデーション(validation/)・ドメインロジック・認証・ストレージ抽象化
 tests/                  Vitest(unit/ 単体テスト、integration/ 実DBを使った統合テスト)
 ```
+
+## 19. Vercelへのデプロイ手順
+
+本プロジェクトは Vercel + Cloudflare R2(画像) + PostgreSQL の構成を想定している。
+
+1. **PostgreSQLを用意する**(Vercel Postgres / Neon / Supabase 等いずれでも可。接続文字列が発行されればよい)
+2. **Cloudflare R2 を設定する**(本書「13」の手順でバケット・APIトークン・公開URLを準備)
+3. **GitHubリポジトリに push** し、Vercelでプロジェクトをインポート
+4. **Vercelの環境変数**に以下を設定(Project Settings → Environment Variables):
+   - `DATABASE_URL`: PostgreSQLの接続文字列
+   - `SESSION_SECRET`: 長いランダム文字列(`openssl rand -base64 32`)
+   - `STORAGE_DRIVER`: `s3`
+   - `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_PUBLIC_BASE_URL`: R2の値
+   - `SITE_URL`: 本番ドメイン(例: `https://www.travelestate.jp`)
+   - `SMTP_*` / `MAIL_FROM` / `MAIL_TO_ADMIN`: 問い合わせ通知メールを使う場合のみ
+   - `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`: 本番デプロイ後の初回シード用途のみ。シード実行後は不要(本書「11」参照)
+5. **`prisma/schema.prisma` の `datasource` を `postgresql` に変更**してからpush(本書「14」)
+6. **ビルド時にマイグレーションを適用**する。Vercelの「Build Command」を以下に変更:
+   ```
+   npx prisma migrate deploy && npm run build
+   ```
+7. 初回デプロイ後、Vercelの「Functions」または手元から本番DBに対して `npm run db:seed` 相当の初期データ投入、または本書「11」の手順で本番用管理者アカウントを作成する
+8. **更新期限の自動非公開処理**: 本MVPでは管理画面アクセス時のみ評価される簡易実装のため、本番では [Vercel Cron Jobs](https://vercel.com/docs/cron-jobs) で `enforceOverdueAutoUnpublish()` を呼び出す軽量なAPI Route(例: `src/app/api/cron/overdue-check/route.ts`)を追加し、`vercel.json` で1日1回程度実行するよう設定することを推奨(現バージョンには未実装)。
+
+### 注意点
+- Vercelのファイルシステムは実行ごとにリセットされるため、`STORAGE_DRIVER=local` のまま本番運用すると画像がすぐに消える。必ず `s3` に設定すること。
+- SQLite(`file:...`)はVercel上で永続化できないため、必ずPostgreSQLに切り替えること。

@@ -94,9 +94,11 @@ export function UnitForm({
   equipmentOptions: { id: string; name: string }[];
 }) {
   const [state, formAction, isPending] = useActionState(action, { status: "idle" } as UnitActionState);
-  const [otherCosts, setOtherCosts] = useState<UnitFormOtherCost[]>(defaults.otherCosts);
-  const [equipmentIds, setEquipmentIds] = useState<string[]>(defaults.equipmentIds);
+  const [otherCosts, setOtherCosts] = useState<UnitFormOtherCost[]>(defaults.otherCosts ?? []);
+  const [equipmentIds, setEquipmentIds] = useState<string[]>(defaults.equipmentIds ?? []);
   const fieldErrors = state.fieldErrors ?? {};
+  const safeBuildingOptions = buildingOptions ?? [];
+  const safeEquipmentOptions = equipmentOptions ?? [];
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
@@ -118,7 +120,7 @@ export function UnitForm({
           建物<span className="ml-1 text-red-600">必須</span>
           <select name="buildingId" defaultValue={defaults.buildingId} required className="rounded-md border border-neutral-300 px-3 py-2">
             <option value="">選択してください</option>
-            {buildingOptions.map((b) => (
+            {safeBuildingOptions.map((b) => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
@@ -250,7 +252,7 @@ export function UnitForm({
       <section>
         <h2 className="mb-2 text-sm font-bold text-neutral-800">設備・条件</h2>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {equipmentOptions.map((eq) => (
+          {safeEquipmentOptions.map((eq) => (
             <label key={eq.id} className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

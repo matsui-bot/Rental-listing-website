@@ -2,12 +2,10 @@ import "server-only";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import sharp from "sharp";
 import type { SavedImage, StorageProvider } from "./types";
+import { processImage } from "./image-processing";
 
 const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
-const MAX_DIMENSION = 2000;
-const THUMBNAIL_WIDTH = 480;
 
 function yearMonthDir(): string {
   const now = new Date();
@@ -23,35 +21,14 @@ function safeFileName(extension: string): string {
 
 export class LocalStorageProvider implements StorageProvider {
   async saveImage(buffer: Buffer, originalFileName: string): Promise<SavedImage> {
+    const { mainBuffer, thumbBuffer, extension } = await processImage(buffer, originalFileName);
+
     const subDir = yearMonthDir();
     const dirAbsolute = path.join(UPLOAD_ROOT, subDir);
     await mkdir(dirAbsolute, { recursive: true });
 
-    const originalExtension = path.extname(originalFileName).toLowerCase();
-    const outputExtension = [".jpg", ".jpeg", ".png", ".webp"].includes(originalExtension)
-      ? originalExtension
-      : ".jpg";
-
-    const mainName = safeFileName(outputExtension);
-    const thumbName = safeFileName(outputExtension);
-
-    const image = sharp(buffer, { failOn: "none" }).rotate();
-    const metadata = await image.metadata();
-
-    const mainPipeline =
-      metadata.width && metadata.width > MAX_DIMENSION
-        ? image.resize({ width: MAX_DIMENSION, withoutEnlargement: true })
-        : image;
-
-    const mainBuffer = await mainPipeline
-      .toFormat(outputExtension === ".png" ? "png" : "jpeg", { quality: 82 })
-      .toBuffer();
-
-    const thumbBuffer = await sharp(buffer, { failOn: "none" })
-      .rotate()
-      .resize({ width: THUMBNAIL_WIDTH, withoutEnlargement: true })
-      .toFormat(outputExtension === ".png" ? "png" : "jpeg", { quality: 78 })
-      .toBuffer();
+    const mainName = safeFileName(extension);
+    const thumbName = safeFileName(extension);
 
     await writeFile(path.join(dirAbsolute, mainName), mainBuffer);
     await writeFile(path.join(dirAbsolute, thumbName), thumbBuffer);
