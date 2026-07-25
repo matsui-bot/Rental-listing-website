@@ -167,6 +167,10 @@ await prisma.adminUser.create({
 
 ## 14. データベースをPostgreSQLへ変更する方法
 
+**Vercelにデプロイする場合**は、本プロジェクトに同梱済みの `prisma-postgres/` (生成スキーマ + マイグレーション)をそのまま使えるため、この節の作業は不要。本書「19」を参照。
+
+Vercel以外にデプロイする場合や、開発環境ごとPostgreSQLへ移行したい場合:
+
 1. `prisma/schema.prisma` の `datasource db` を変更:
    ```prisma
    datasource db {
@@ -175,8 +179,8 @@ await prisma.adminUser.create({
    }
    ```
 2. `.env` の `DATABASE_URL` を PostgreSQL の接続文字列に変更(例: `postgresql://user:password@host:5432/dbname`)
-3. `npx prisma migrate deploy`(本番)または `npx prisma migrate dev`(開発)でスキーマを反映
-4. SQLite固有の型は使用していないため、上記のみでアプリケーションコードの変更は不要
+3. 既存の `prisma/migrations/`(SQLite用SQL)は互換性がないため削除し、`npx prisma migrate dev --name init` でPostgreSQL用のマイグレーションを作り直す
+4. SQLite固有の型は使用していないため、モデル定義自体の変更は不要
 
 ## 15. 実装済み機能(要件定義書との対応)
 
@@ -239,27 +243,40 @@ tests/                  Vitest(unit/ 単体テスト、integration/ 実DBを使�
 
 ## 19. Vercelへのデプロイ手順
 
-本プロジェクトは Vercel + Cloudflare R2(画像) + PostgreSQL の構成を想定している。
+本プロジェクトは Vercel + Cloudflare R2(画像) + Prisma Postgres(Vercel Postgres) の構成を想定している。
 
-1. **PostgreSQLを用意する**(Vercel Postgres / Neon / Supabase 等いずれでも可。接続文字列が発行されればよい)
-2. **Cloudflare R2 を設定する**(本書「13」の手順でバケット・APIトークン・公開URLを準備)
-3. **GitHubリポジトリに push** し、Vercelでプロジェクトをインポート
-4. **Vercelの環境変数**に以下を設定(Project Settings → Environment Variables):
-   - `DATABASE_URL`: PostgreSQLの接続文字列
+### なぜスキーマファイルが2つあるのか
+
+`prisma/schema.prisma`(SQLite・開発/テスト用)とは別に `prisma-postgres/schema.prisma`(PostgreSQL・本番用)を用意している。Prismaは1つのスキーマファイルにつき1つの`provider`しか持てないため、開発環境のSQLiteを維持したまま本番用にPostgreSQLへ切り替えるには、datasourceだけが異なる2つ目のスキーマが必要になる。
+
+- `prisma-postgres/schema.prisma` は **自動生成ファイル(gitで管理しない)**。`prisma/schema.prisma` から `npm run db:generate:postgres-schema` で生成される(datasourceブロックのみ書き換え、モデル定義は共通)。モデルを変更する場合は必ず `prisma/schema.prisma` を編集すること。
+- `prisma-postgres/migrations/` は本番DBのマイグレーション履歴なので **gitで管理する**(`prisma/migrations/` とは別の履歴)。
+
+### 手順
+
+1. **Cloudflare R2 を設定する**(本書「13」の手順でバケット・APIトークン・公開URLを準備)
+2. **GitHubにpushし、Vercelでプロジェクトを作成**してから「Storage」タブで Prisma Postgres(または任意のPostgreSQL)を追加する。追加すると `DATABASE_URL` 等がプロジェクトの環境変数に自動追加される。
+3. **その他の環境変数**を追加(Project Settings → Environment Variables。DATABASE_URL系はStorage追加時に自動設定済みなので不要):
    - `SESSION_SECRET`: 長いランダム文字列(`openssl rand -base64 32`)
    - `STORAGE_DRIVER`: `s3`
    - `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_PUBLIC_BASE_URL`: R2の値
    - `SITE_URL`: 本番ドメイン(例: `https://www.travelestate.jp`)
    - `SMTP_*` / `MAIL_FROM` / `MAIL_TO_ADMIN`: 問い合わせ通知メールを使う場合のみ
-   - `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`: 本番デプロイ後の初回シード用途のみ。シード実行後は不要(本書「11」参照)
-5. **`prisma/schema.prisma` の `datasource` を `postgresql` に変更**してからpush(本書「14」)
-6. **ビルド時にマイグレーションを適用**する。Vercelの「Build Command」を以下に変更:
+4. **Vercelの「Build Command」を `npm run vercel-build` に変更**する(Project Settings → Build & Development Settings)。このコマンドは以下を順に実行する:
    ```
-   npx prisma migrate deploy && npm run build
+   npm run db:generate:postgres-schema   # prisma-postgres/schema.prisma を生成
+   prisma generate --schema=prisma-postgres/schema.prisma
+   prisma migrate deploy --schema=prisma-postgres/schema.prisma
+   next build
    ```
-7. 初回デプロイ後、Vercelの「Functions」または手元から本番DBに対して `npm run db:seed` 相当の初期データ投入、または本書「11」の手順で本番用管理者アカウントを作成する
-8. **更新期限の自動非公開処理**: 本MVPでは管理画面アクセス時のみ評価される簡易実装のため、本番では [Vercel Cron Jobs](https://vercel.com/docs/cron-jobs) で `enforceOverdueAutoUnpublish()` を呼び出す軽量なAPI Route(例: `src/app/api/cron/overdue-check/route.ts`)を追加し、`vercel.json` で1日1回程度実行するよう設定することを推奨(現バージョンには未実装)。
+5. デプロイを実行する
+6. 初回デプロイ後、本番用管理者アカウントを作成する(本書「11」)。ダミーのシードデータを投入したい場合は、ローカルから本番の `DATABASE_URL` を指定して `npx dotenv -e .env.production.local -- tsx prisma/seed.ts` のように実行できる(`.env.production.local` は `vercel env pull .env.production.local --environment=production` で取得)
+7. **更新期限の自動非公開処理**: 本MVPでは管理画面アクセス時のみ評価される簡易実装のため、本番では [Vercel Cron Jobs](https://vercel.com/docs/cron-jobs) で `enforceOverdueAutoUnpublish()` を呼び出す軽量なAPI Route(例: `src/app/api/cron/overdue-check/route.ts`)を追加し、`vercel.json` で1日1回程度実行するよう設定することを推奨(現バージョンには未実装)。
+
+### 本番用スキーマの動作確認について
+
+`prisma-postgres/migrations/` のマイグレーションSQLは、実際のPostgreSQLに接続せず `prisma migrate diff --from-empty --to-schema-datamodel` で生成したものです(この開発環境にはPostgreSQL/Dockerが無く、実DBに対する動作確認ができていません)。生成されたSQLの内容は目視で確認済みですが、**初回デプロイ時にVercelのデプロイログでマイグレーションが正常に適用されたか必ず確認してください**。
 
 ### 注意点
 - Vercelのファイルシステムは実行ごとにリセットされるため、`STORAGE_DRIVER=local` のまま本番運用すると画像がすぐに消える。必ず `s3` に設定すること。
-- SQLite(`file:...`)はVercel上で永続化できないため、必ずPostgreSQLに切り替えること。
+- SQLite(`file:...`)はVercel上で永続化できないため、必ずPostgreSQLに切り替えること(本プロジェクトでは `prisma-postgres/schema.prisma` がその役割を担う)。

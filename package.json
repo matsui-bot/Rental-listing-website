@@ -14,7 +14,9 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "db:generate:postgres-schema": "node scripts/generate-postgres-schema.mjs",
+    "vercel-build": "npm run db:generate:postgres-schema && prisma generate --schema=prisma-postgres/schema.prisma && prisma migrate deploy --schema=prisma-postgres/schema.prisma && next build"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -30,12 +30,10 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (templates are committed; local/secret env files are not)
-.env
-.env.local
-.env.*.local
-.env.production
-.env.development
+# env files (templates .env.example / .env.test are committed; everything else is not)
+.env*
+!.env.example
+!.env.test
 
 # vercel
 .vercel
@@ -55,3 +53,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# generated (regenerate via `npm run db:generate:postgres-schema`)
+/prisma-postgres/schema.prisma
