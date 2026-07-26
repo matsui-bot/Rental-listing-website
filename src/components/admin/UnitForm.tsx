@@ -105,9 +105,16 @@ export function UnitForm({
       <input type="hidden" name="otherCostsJson" value={JSON.stringify(otherCosts)} />
 
       {state.status === "error" && state.message && (
-        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-          {state.message}
-        </p>
+        <div role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+          <p>{state.message}</p>
+          {Object.keys(fieldErrors).length > 0 && (
+            <ul className="mt-2 list-inside list-disc font-normal">
+              {Object.entries(fieldErrors).map(([field, messages]) => (
+                <li key={field}>{messages?.[0]}</li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
       {state.status === "idle" && state.message && (
         <p role="status" className="rounded-md bg-brand-50 px-3 py-2 text-sm font-medium text-brand-700">
