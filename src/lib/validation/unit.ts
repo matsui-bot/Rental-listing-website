@@ -12,6 +12,15 @@ export const otherCostSchema = z.object({
 
 const optionalYen = z.coerce.number().int().min(0).optional().nullable();
 
+/**
+ * 「未選択」を表す空文字列を送信するselect用のenumバリデーション。
+ * z.enum(...).optional() は undefined のみを許容し空文字列 "" は弾いてしまうため、
+ * "" を undefined に変換してから検証する。
+ */
+function optionalEnum<T extends [string, ...string[]]>(values: T) {
+  return z.preprocess((v) => (v === "" ? undefined : v), z.enum(values).optional().nullable());
+}
+
 export const unitSchema = z.object({
   buildingId: z.string().trim().min(1, "建物を選択してください"),
   managementNumber: z.string().trim().min(1, "管理番号を入力してください").max(50),
@@ -35,7 +44,7 @@ export const unitSchema = z.object({
   renewalFee: optionalYen,
 
   contractPeriod: z.string().trim().max(30).optional().or(z.literal("")),
-  contractType: z.enum(["NORMAL", "FIXED_TERM"]).optional().nullable(),
+  contractType: optionalEnum(["NORMAL", "FIXED_TERM"]),
   availableDate: z.string().trim().max(50).optional().or(z.literal("")),
   currentStatus: z.string().trim().max(30).optional().or(z.literal("")),
 
@@ -43,7 +52,7 @@ export const unitSchema = z.object({
   catchCopy: z.string().trim().max(100).optional().or(z.literal("")),
   remarks: z.string().trim().max(2000).optional().or(z.literal("")),
   specialTerms: z.string().trim().max(2000).optional().or(z.literal("")),
-  transactionType: z.enum(["BROKERAGE", "AGENCY", "LANDLORD"]).optional().nullable(),
+  transactionType: optionalEnum(["BROKERAGE", "AGENCY", "LANDLORD"]),
   featureTags: z.string().trim().max(300).optional().or(z.literal("")),
 
   otherCosts: z.array(otherCostSchema).default([]),

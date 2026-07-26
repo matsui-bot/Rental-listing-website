@@ -108,4 +108,18 @@ describe("unitSchema", () => {
   it("rejects a missing buildingId", () => {
     expect(unitSchema.safeParse({ ...validUnit, buildingId: "" }).success).toBe(false);
   });
+
+  it("treats an empty string as unselected for contractType and transactionType (regression: 未選択 option submits '')", () => {
+    const result = unitSchema.safeParse({ ...validUnit, contractType: "", transactionType: "" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.contractType).toBeUndefined();
+      expect(result.data.transactionType).toBeUndefined();
+    }
+  });
+
+  it("still rejects a genuinely invalid contractType/transactionType value", () => {
+    expect(unitSchema.safeParse({ ...validUnit, contractType: "NOT_REAL" }).success).toBe(false);
+    expect(unitSchema.safeParse({ ...validUnit, transactionType: "NOT_REAL" }).success).toBe(false);
+  });
 });
