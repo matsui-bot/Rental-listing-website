@@ -18,6 +18,13 @@ if (process.env.S3_PUBLIC_BASE_URL) {
 
 const nextConfig: NextConfig = {
   images: { remotePatterns },
+  experimental: {
+    serverActions: {
+      // 既定は1MB。写真の複数枚同時アップロードが Server Action 経由のため引き上げる
+      // (1枚あたり最大8MB、複数枚まとめて送れるよう余裕を持たせている)
+      bodySizeLimit: "50mb",
+    },
+  },
 };
 
 export default nextConfig;
