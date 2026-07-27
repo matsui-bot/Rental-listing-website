@@ -26,13 +26,24 @@ describe("session token", () => {
 });
 
 describe("password hashing", () => {
-  it("hashes and verifies a correct password", async () => {
-    const hash = await hashPassword("Sup3rSecret!");
-    expect(await verifyPassword("Sup3rSecret!", hash)).toBe(true);
-  });
+  // bcrypt (12 rounds) is CPU-bound and can exceed Vitest's 5s default under load; give it headroom.
+  const BCRYPT_TEST_TIMEOUT = 20000;
 
-  it("rejects an incorrect password", async () => {
-    const hash = await hashPassword("Sup3rSecret!");
-    expect(await verifyPassword("wrong-password", hash)).toBe(false);
-  });
+  it(
+    "hashes and verifies a correct password",
+    async () => {
+      const hash = await hashPassword("Sup3rSecret!");
+      expect(await verifyPassword("Sup3rSecret!", hash)).toBe(true);
+    },
+    BCRYPT_TEST_TIMEOUT,
+  );
+
+  it(
+    "rejects an incorrect password",
+    async () => {
+      const hash = await hashPassword("Sup3rSecret!");
+      expect(await verifyPassword("wrong-password", hash)).toBe(false);
+    },
+    BCRYPT_TEST_TIMEOUT,
+  );
 });
