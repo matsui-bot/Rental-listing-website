@@ -81,12 +81,13 @@ describe("公開前の入力チェック(DB経由)", () => {
 
 describe("問い合わせの保存", () => {
   it("有効な入力を検証し、問い合わせとしてDBに保存できる", async () => {
+    // FormData から来る実際の形状(チェックボックスは文字列 "true")でテストする
     const input = {
       name: "統合テスト太郎",
       phone: "090-0000-0000",
       email: "",
       preferredContactMethod: "PHONE" as const,
-      agreeToPolicy: true as const,
+      agreeToPolicy: "true" as const,
       website: "",
     };
     const parsed = contactFormSchema.parse(input);
@@ -106,12 +107,11 @@ describe("問い合わせの保存", () => {
     expect(saved?.status).toBe("NEW");
   });
 
-  it("不正な入力(同意なし)はバリデーションで拒否される", () => {
+  it("不正な入力(同意なし。未チェックのチェックボックスはキー自体がFormDataに無い)はバリデーションで拒否される", () => {
     const result = contactFormSchema.safeParse({
       name: "テスト",
       phone: "090-0000-0000",
       preferredContactMethod: "PHONE",
-      agreeToPolicy: false,
     });
     expect(result.success).toBe(false);
   });

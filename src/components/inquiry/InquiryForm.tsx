@@ -50,9 +50,16 @@ export function InquiryForm({ context }: { context?: InquiryFormContext }) {
       )}
 
       {state.status === "error" && state.message && (
-        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-          {state.message}
-        </p>
+        <div role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+          <p>{state.message}</p>
+          {Object.keys(fieldErrors).length > 0 && (
+            <ul className="mt-2 list-inside list-disc font-normal">
+              {Object.entries(fieldErrors).map(([field, messages]) => (
+                <li key={field}>{messages?.[0]}</li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       <FormField label="氏名" htmlFor={`${formId}-name`} required error={fieldErrors.name}>
@@ -138,15 +145,22 @@ export function InquiryForm({ context }: { context?: InquiryFormContext }) {
         />
       </FormField>
 
-      <label className="flex items-start gap-2 text-sm">
-        <input type="checkbox" name="agreeToPolicy" value="true" required className="mt-1" />
-        <span>
-          <a href="/privacy" target="_blank" className="text-brand-700 underline">
-            個人情報の取り扱い
-          </a>
-          に同意する<span className="ml-1 text-red-600">必須</span>
-        </span>
-      </label>
+      <div>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" name="agreeToPolicy" value="true" required className="mt-1" />
+          <span>
+            <a href="/privacy" target="_blank" className="text-brand-700 underline">
+              個人情報の取り扱い
+            </a>
+            に同意する<span className="ml-1 text-red-600">必須</span>
+          </span>
+        </label>
+        {fieldErrors.agreeToPolicy && (
+          <p role="alert" className="mt-1 text-xs text-red-600">
+            {fieldErrors.agreeToPolicy[0]}
+          </p>
+        )}
+      </div>
 
       <button
         type="submit"

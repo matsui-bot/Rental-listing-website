@@ -18,7 +18,9 @@ export const contactFormSchema = z
     preferredContactMethod: z.enum(["PHONE", "EMAIL"], {
       message: "希望する連絡方法を選択してください",
     }),
-    agreeToPolicy: z.literal(true, {
+    // HTMLのチェックボックスはチェック時に value 属性の文字列("true")を送信し、
+    // 未チェック時はキー自体が FormData に含まれない(ブール値の true/false にはならない)。
+    agreeToPolicy: z.literal("true", {
       message: "個人情報の取り扱いに同意してください",
     }),
     preferredViewingDate: z.string().trim().max(100).optional().or(z.literal("")),

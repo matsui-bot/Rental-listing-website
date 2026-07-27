@@ -5,12 +5,15 @@ import { buildingSchema } from "@/lib/validation/building";
 import { unitSchema } from "@/lib/validation/unit";
 
 describe("contactFormSchema", () => {
+  // FormData から来る値はすべて文字列(チェックボックスは value 属性の文字列、未チェックならキー自体が無い)。
+  // JSのbooleanを直接渡すテストは実際のフォーム送信を表しておらず、agreeToPolicy: z.literal(true) の
+  // 回帰(文字列 "true" を弾いてしまう不具合)を検出できなかった。実際の FormData 形状でテストする。
   const base = {
     name: "山田太郎",
     phone: "090-1234-5678",
     email: "",
     preferredContactMethod: "PHONE",
-    agreeToPolicy: true,
+    agreeToPolicy: "true",
     website: "",
   };
 
@@ -19,13 +22,25 @@ describe("contactFormSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts a submission built from a real FormData object (regression: checkbox sends string, not boolean)", () => {
+    const formData = new FormData();
+    formData.set("name", "山田太郎");
+    formData.set("phone", "090-1234-5678");
+    formData.set("preferredContactMethod", "PHONE");
+    formData.set("agreeToPolicy", "true"); // checked checkbox with value="true"
+    const raw = Object.fromEntries(formData.entries());
+    const result = contactFormSchema.safeParse(raw);
+    expect(result.success).toBe(true);
+  });
+
   it("rejects when neither phone nor email is provided", () => {
     const result = contactFormSchema.safeParse({ ...base, phone: "" });
     expect(result.success).toBe(false);
   });
 
-  it("rejects when privacy policy agreement is not checked", () => {
-    const result = contactFormSchema.safeParse({ ...base, agreeToPolicy: false });
+  it("rejects when privacy policy agreement is not checked (key absent from FormData, as a real unchecked checkbox sends)", () => {
+    const { agreeToPolicy: _omit, ...withoutAgreement } = base;
+    const result = contactFormSchema.safeParse(withoutAgreement);
     expect(result.success).toBe(false);
   });
 
